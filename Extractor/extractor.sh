@@ -2,13 +2,13 @@
 #$1 : Folder containing .git directory to scan
 #$2 : Folder to put files to
 function init_header() {
-    cat <<EOF
+    cat 1>&2 <<EOF
 ###########
 # Extractor is part of https://github.com/internetwache/GitTools
 #
 # Developed and maintained by @gehaxelt from @internetwache
 #
-# Use at your own risk. Usage might be illegal in certain circumstances. 
+# Use at your own risk. Usage might be illegal in certain circumstances.
 # Only for educational purposes!
 ###########
 EOF
@@ -16,19 +16,19 @@ EOF
 
 init_header
 
-if [ $# -ne 2 ]; then
-	echo -e "\e[33m[*] USAGE: extractor.sh GIT-DIR DEST-DIR\e[0m";
+if [ $# != 2 ]; then
+	printf '\e[33m[*] USAGE: extractor.sh GIT-DIR DEST-DIR\e[0m' 1>&2
 	exit 1;
 fi
 
 if [ ! -d "$1/.git" ]; then
-	echo -e "\e[31m[-] There's no .git folder\e[0m";
+	printf "\\e[31m[-] There's no .git folder\\e[0m" 1>&2
 	exit 1;
 fi
 
 if [ ! -d "$2" ]; then
-	echo -e "\e[33m[*] Destination folder does not exist\e[0m";
-    echo -e "\e[32m[*] Creating...\e[0m"
+	printf '\e[33m[*] Destination directory does not exist\e[0m' 1>&2
+    printf '\e[32m[*] Creating...\e[0m' 1>&2
     mkdir "$2"
 fi
 
@@ -39,22 +39,21 @@ function traverse_tree() {
     #Read blobs/tree information from root tree
 	git ls-tree $tree |
 	while read leaf; do
-		type=$(echo $leaf | awk -F' ' '{print $2}') #grep -oP "^\d+\s+\K\w{4}");
-		hash=$(echo $leaf | awk -F' ' '{print $3}') #grep -oP "^\d+\s+\w{4}\s+\K\w{40}");
+		type=$(echo $leaf | awk -F ' ' '{print $2}') #grep -oP "^\d+\s+\K\w{4}");
+		hash=$(echo $leaf | awk -F ' ' '{print $3}') #grep -oP "^\d+\s+\w{4}\s+\K\w{40}");
 		name=$(echo $leaf | awk '{$1=$2=$3=""; print substr($0,4)}') #grep -oP "^\d+\s+\w{4}\s+\w{40}\s+\K.*");
 		
         # Get the blob data
-		git cat-file -e $hash;
 		#Ignore invalid git objects (e.g. ones that are missing)
-		if [ $? -ne 0 ]; then
+		if ! git cat-file -e $hash; then
 			continue;
 		fi	
 		
 		if [ "$type" = "blob" ]; then
-			echo -e "\e[32m[+] Found file: $path/$name\e[0m"
+			printf '\e[32m[+] Found non-directory: %s\e[0m' "$path/$name" 1>&2
 			git cat-file -p $hash > "$path/$name"
 		else
-			echo -e "\e[32m[+] Found folder: $path/$name\e[0m"
+			printf '\e[32m[+] Found directory: %s\e[0m' "$path/$name" 1>&2
 			mkdir -p "$path/$name";
 			#Recursively traverse sub trees
 			traverse_tree $hash "$path/$name";
@@ -69,7 +68,7 @@ function traverse_commit() {
 	local count=$3
 	
     #Create folder for commit data
-	echo -e "\e[32m[+] Found commit: $commit\e[0m";
+	printf '\e[32m[+] Found commit: %s\e[0m' "$commit" 1>&2
 	path="$base/$count-$commit"
 	mkdir -p $path;
     #Add meta information
@@ -91,7 +90,7 @@ fi
 cd $1
 
 #Extract all object hashes
-find ".git/objects" -type f | 
+find ".git/objects" -type f |
 	sed -e "s/\///g" |
 	sed -e "s/\.gitobjects//g" |
 	while read object; do

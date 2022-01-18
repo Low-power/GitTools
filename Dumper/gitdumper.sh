@@ -3,13 +3,13 @@
 #$2 : Folder where the .git-directory will be created
 
 function init_header() {
-    cat <<EOF
+    cat 1>&2 <<EOF
 ###########
 # GitDumper is part of https://github.com/internetwache/GitTools
 #
 # Developed and maintained by @gehaxelt from @internetwache
 #
-# Use at your own risk. Usage might be illegal in certain circumstances. 
+# Use at your own risk. Usage might be illegal in certain circumstances.
 # Only for educational purposes!
 ###########
 
@@ -45,20 +45,20 @@ GITDIR=$(get_git_dir "$@")
 BASEGITDIR="$BASEDIR/$GITDIR/";
 
 if [ $# -lt 2 ]; then
-    echo -e "\033[33m[*] USAGE: http://target.tld/.git/ dest-dir [--git-dir=otherdir]\033[0m";
-    echo -e "\t\t--git-dir=otherdir\t\tChange the git folder name. Default: .git"
+    printf '\033[33m[*] USAGE: http://target.tld/.git/ dest-dir [--git-dir=otherdir]\033[0m\n' 1>&2
+    printf '\t\t--git-dir=otherdir\t\tChange the git folder name. Default: .git\n' 1>&2
     exit 1;
 fi
 
 
 if [[ ! "$BASEURL" =~ /$GITDIR/$ ]]; then
-    echo -e "\033[31m[-] /$GITDIR/ missing in url\033[0m";
+    printf '\033[31m[-] /%s/ missing in url\033[0m\n' "$GITDIR" 1>&2
     exit 0;
 fi
 
 if [ ! -d "$BASEGITDIR" ]; then
-    echo -e "\033[33m[*] Destination folder does not exist\033[0m";
-    echo -e "\033[32m[+] Creating $BASEGITDIR\033[0m";
+    printf '\033[33m[*] Destination folder does not exist\033[0m\n' 1>&2
+    printf '\033[32m[+] Creating %s\033[0m\n' "$BASEGITDIR" 1>&2
     mkdir -p "$BASEGITDIR";
 fi
 
@@ -106,50 +106,43 @@ function download_item() {
     local target="$BASEGITDIR$objname"
 
     #Create folder
-    dir=$(echo "$objname" | grep -oE "^(.*)/")
-    if [ $? -ne 1 ]; then
+    if dir=$(echo "$objname" | grep -oE "^(.*)/"); then
         mkdir -p "$BASEGITDIR/$dir"
     fi
 
     #Download file
-    curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36" -f -k -s "$url" -o "$target"
-    
+    #wget --no-verbose --no-check-certificate "$url" -O "$target"
     #Mark as downloaded and remove it from the queue
     DOWNLOADED+=("$objname")
-    if [ ! -f "$target" ]; then
-        echo -e "\033[31m[-] Downloaded: $objname\033[0m"
+    if ! wget --no-check-certificate "$url" -O "$target"; then
+        [ -f "$target" ] && [ `wc -c < "$target"` = 0 ] && rm -f "$target"
+        printf '\033[31m[-] Missed: %s\033[0m\n' "$objname" 1>&2
         return
     fi
-    echo -e "\033[32m[+] Downloaded: $objname\033[0m"
+    printf '\033[32m[+] Downloaded: %s\033[0m\n' "$objname" 1>&2
 
     #Check if we have an object hash
-    if [[ "$objname" =~ /[a-f0-9]{2}/[a-f0-9]{38} ]]; then 
+    if [[ "$objname" =~ /[a-f0-9]{2}/[a-f0-9]{38} ]]; then
         #Switch into $BASEDIR and save current working directory
         cwd=$(pwd)
         cd "$BASEDIR"
-        
         #Restore hash from $objectname
         hash=$(echo "$objname" | sed -e 's~objects~~g' | sed -e 's~/~~g')
-        
         #Check if it's valid git object
-        type=$(git cat-file -t "$hash" 2> /dev/null)
-        if [ $? -ne 0 ]; then
+        if ! type=$(git cat-file -t "$hash" 2> /dev/null); then
             #Delete invalid file
             cd "$cwd"
             rm "$target"
-            return 
+            return
         fi
-        
         #Parse output of git cat-file -p $hash. Use strings for blobs
         if [[ "$type" != "blob" ]]; then
             hashes+=($(git cat-file -p "$hash" | grep -oE "([a-f0-9]{40})"))
         else
             hashes+=($(git cat-file -p "$hash" | strings -a | grep -oE "([a-f0-9]{40})"))
         fi
-
         cd "$cwd"
-    fi 
-    
+    fi
     #Parse file for other objects
     hashes+=($(cat "$target" | strings -a | grep -oE "([a-f0-9]{40})"))
     for hash in ${hashes[*]}
@@ -160,7 +153,7 @@ function download_item() {
     #Parse file for packs
     packs+=($(cat "$target" | strings -a | grep -oE "(pack\-[a-f0-9]{40})"))
     for pack in ${packs[*]}
-    do 
+    do
         QUEUE+=("objects/pack/$pack.pack")
         QUEUE+=("objects/pack/$pack.idx")
     done
